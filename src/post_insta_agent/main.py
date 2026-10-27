@@ -1,7 +1,7 @@
-from model import get_google_output
-from text_to_image import text_to_image
-from instagram_connection import publish_image
-from cloudinary_upload import upload_image
+from .model import get_google_output
+from .text_to_image import text_to_image
+from .instagram_connection import publish_image
+from .cloudinary_upload import upload_image
 
 
 def main():
