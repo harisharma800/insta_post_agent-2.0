@@ -5,6 +5,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+INSTAGRAM_USER_ID = os.getenv("INSTAGRAM_USER_ID")
+
+BASE_URL = "https://graph.instagram.com/v25.0"
+
+
 def wait_for_container(
     container_id: str,
     max_wait: int = 300,
@@ -54,16 +60,16 @@ def wait_for_container(
     )
 
 
-ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
-INSTAGRAM_USER_ID = os.getenv("INSTAGRAM_USER_ID")
+def publish_image(
+    image_url: str,
+    caption: str = "#motivation",
+) -> dict:
+    """Create and publish an Instagram image post."""
 
-
-BASE_URL = "https://graph.instagram.com/v25.0"
-
-
-def publish_image(image_url: str, caption: str = "#motivation") -> dict:
     if not ACCESS_TOKEN or not INSTAGRAM_USER_ID:
-        raise ValueError("Instagram credentials missing in .env")
+        raise ValueError(
+            "Instagram credentials missing. Check environment variables."
+        )
 
     # Step 1: Create media container
     response = requests.post(
@@ -79,15 +85,14 @@ def publish_image(image_url: str, caption: str = "#motivation") -> dict:
     print("Create media status:", response.status_code)
     print("Create media response:", response.text)
     response.raise_for_status()
-    
+
     container_id = response.json()["id"]
     print("Container created:", container_id)
 
-    # Step 2: Wait until Instagram finishes processing
+    # Step 2: Wait for Instagram to finish processing
     wait_for_container(container_id)
 
-
-    # Step 2: Publish media
+    # Step 3: Publish only after processing finishes
     response = requests.post(
         f"{BASE_URL}/{INSTAGRAM_USER_ID}/media_publish",
         data={
@@ -102,6 +107,7 @@ def publish_image(image_url: str, caption: str = "#motivation") -> dict:
     response.raise_for_status()
 
     result = response.json()
+
     print("Instagram post published! Media ID:", result["id"])
 
     return result
