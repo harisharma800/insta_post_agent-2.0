@@ -87,21 +87,42 @@ def publish_image(image_url: str, caption: str = "#motivation") -> dict:
     wait_for_container(container_id)
 
 
-    # Step 2: Publish media
-    response = requests.post(
-        f"{BASE_URL}/{INSTAGRAM_USER_ID}/media_publish",
-        data={
-            "creation_id": container_id,
-            "access_token": ACCESS_TOKEN,
-        },
-        timeout=60,
-    )
+    # Step 3: Publish media (with retry for transient "not ready" responses)
+    result = None
+    for attempt in range(1, 6):
+        response = requests.post(
+            f"{BASE_URL}/{INSTAGRAM_USER_ID}/media_publish",
+            data={
+                "creation_id": container_id,
+                "access_token": ACCESS_TOKEN,
+            },
+            timeout=60,
+        )
 
-    print("Publish status:", response.status_code)
-    print("Publish response:", response.text)
-    response.raise_for_status()
+        print("Publish status:", response.status_code)
+        print("Publish response:", response.text)
 
-    result = response.json()
+        if response.ok:
+            result = response.json()
+            break
+
+        should_retry = False
+        if response.status_code == 400:
+            try:
+                error_message = response.json().get("error", {}).get("message", "")
+                should_retry = "Media ID is not available" in error_message
+            except ValueError:
+                should_retry = False
+
+        if should_retry and attempt < 5:
+            time.sleep(5)
+            continue
+
+        response.raise_for_status()
+
+    if result is None:
+        raise RuntimeError("Instagram publish failed after retries.")
+
     print("Instagram post published! Media ID:", result["id"])
 
     return result
