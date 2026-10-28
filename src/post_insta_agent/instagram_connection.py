@@ -1,8 +1,58 @@
 import os
+import time
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+def wait_for_container(
+    container_id: str,
+    max_wait: int = 300,
+    poll_interval: int = 5,
+) -> dict:
+    """Wait until Instagram finishes processing the image."""
+
+    deadline = time.monotonic() + max_wait
+    url = f"{BASE_URL}/{container_id}"
+
+    while time.monotonic() < deadline:
+        response = requests.get(
+            url,
+            params={
+                "fields": "status_code,status",
+                "access_token": ACCESS_TOKEN,
+            },
+            timeout=30,
+        )
+
+        print("Container status response:", response.text)
+        response.raise_for_status()
+
+        data = response.json()
+        status = data.get("status_code")
+
+        print("Instagram container status:", status)
+
+        if status == "FINISHED":
+            return data
+
+        if status in ("ERROR", "EXPIRED"):
+            raise RuntimeError(
+                f"Instagram container is {status}: {data}"
+            )
+
+        if status not in ("IN_PROGRESS", None):
+            raise RuntimeError(
+                f"Unexpected Instagram container status: {data}"
+            )
+
+        time.sleep(poll_interval)
+
+    raise TimeoutError(
+        f"Instagram container {container_id} was not ready "
+        f"within {max_wait} seconds."
+    )
+
 
 ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
 INSTAGRAM_USER_ID = os.getenv("INSTAGRAM_USER_ID")
@@ -29,9 +79,13 @@ def publish_image(image_url: str, caption: str = "#motivation") -> dict:
     print("Create media status:", response.status_code)
     print("Create media response:", response.text)
     response.raise_for_status()
-
+    
     container_id = response.json()["id"]
     print("Container created:", container_id)
+
+    # Step 2: Wait until Instagram finishes processing
+    wait_for_container(container_id)
+
 
     # Step 2: Publish media
     response = requests.post(
